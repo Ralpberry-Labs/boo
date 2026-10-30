@@ -1,0 +1,525 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>God Terminal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0b0d12; --panel: #141821; --line: #232937; --text: #e8ebf2; --muted: #8a93a6;
+    --accent: #7cc4ff; --you: #ffd27c; --rec: #ff5c6c;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif; }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 24px; height: 100%; padding: 24px; }
+  .stage { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 10px; min-height: 0; }
+  canvas { width: min(100%, calc(100vh - 230px)); aspect-ratio: 1; display: block; }
+
+  /* word-by-word captions */
+  .caption { width: min(100%, 780px); min-height: 2.8em; display: flex; flex-wrap: wrap; justify-content: center;
+    align-content: flex-start; font: 800 clamp(20px, 2.6vw, 32px)/1.35 Nunito, ui-rounded, -apple-system, system-ui, sans-serif;
+    letter-spacing: .005em; text-align: center; transition: opacity .4s; }
+  .caption.dim { opacity: .3; }
+  .caption .w { display: inline-block; margin: 0 .13em; color: #dfe6f3; opacity: 0;
+    transform: translateY(.45em) scale(.94); filter: blur(6px);
+    transition: opacity .28s, transform .38s cubic-bezier(.2,.9,.25,1.2), filter .28s, color .3s, text-shadow .3s; }
+  .caption .w.on { opacity: .62; transform: none; filter: none; }
+  .caption .w.now { opacity: 1; color: #fff; transform: translateY(-.06em) scale(1.07);
+    text-shadow: 0 0 .5em rgba(124,196,255,.7), 0 0 1.4em rgba(124,196,255,.35); }
+  .caption .w.pic.on { opacity: 1; background: linear-gradient(100deg, #9fd8ff, #c6a8ff 55%, #ffb3d1);
+    -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: none; }
+  .caption .w.pic.now { filter: drop-shadow(0 0 .35em rgba(198,168,255,.6)); }
+  .caption .e { display: inline-block; margin: 0 .1em 0 -.02em; font-size: .92em; opacity: 0;
+    transform: scale(.2) rotate(-30deg); }
+  .caption .e.on { animation: pop .55s cubic-bezier(.34,1.7,.6,1) forwards, bob 2.6s ease-in-out .55s infinite; }
+  .caption .think { font-weight: 600; font-style: italic; letter-spacing: .02em; opacity: .9;
+    background: linear-gradient(90deg, #5d6b85 0%, #cfe6ff 20%, #e3c9ff 30%, #5d6b85 50%, #5d6b85 100%);
+    background-size: 250% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
+    animation: shimmer 1.6s linear infinite, fadein .5s ease-out; }
+  @keyframes shimmer { from { background-position: 100% 0; } to { background-position: -150% 0; } }
+  @keyframes fadein { from { opacity: 0; filter: blur(6px); transform: translateY(6px); } }
+  @keyframes pop { to { opacity: 1; transform: scale(1) rotate(0); } }
+  @keyframes bob { 0%, 100% { opacity: 1; transform: translateY(0) rotate(0); }
+                   50% { opacity: 1; transform: translateY(-.12em) rotate(6deg); } }
+  @media (prefers-reduced-motion: reduce) { .caption .w, .caption .e { transition: none; animation: none !important; } }
+  aside { display: flex; flex-direction: column; gap: 16px; min-height: 0; }
+  h1 { margin: 0; font-size: 20px; letter-spacing: .02em; }
+  h1 small { display: block; font-size: 12px; font-weight: 400; color: var(--muted); }
+  .mic { display: flex; align-items: center; gap: 14px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 16px; padding: 14px; }
+  .mic button { width: 64px; height: 64px; border-radius: 50%; border: 0; cursor: pointer; flex: none;
+    background: var(--accent); color: #06121e; font-size: 26px; transition: transform .15s, background .2s; }
+  .mic button:active { transform: scale(.94); }
+  .mic button.rec { background: var(--rec); animation: pulse 1.2s infinite; }
+  .mic button:disabled { opacity: .5; cursor: default; }
+  @keyframes pulse { 50% { box-shadow: 0 0 0 10px rgba(255,92,108,.15); } }
+  #status { font-weight: 600; }
+  #hint { font-size: 12px; color: var(--muted); }
+  .toggles { display: flex; gap: 16px; font-size: 13px; color: var(--muted); flex-wrap: wrap; }
+  .toggles label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+  #log { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding-right: 4px; }
+  .msg { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+  .msg b { display: block; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .msg.you b { color: var(--you); } .msg.ai b { color: var(--accent); }
+  .msg mark { background: rgba(124,196,255,.2); color: var(--accent); border-radius: 4px; padding: 0 2px; transition: background .2s, color .2s; }
+  .msg mark.now { background: var(--accent); color: #06121e; }
+  .msg .t { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .empty { color: var(--muted); font-size: 13px; }
+  @media (max-width: 820px) {
+    main { grid-template-columns: 1fr; height: auto; padding: 16px; }
+    canvas { width: 100%; }
+    #log { max-height: 50vh; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <div class="stage">
+    <canvas id="grid"></canvas>
+    <div class="caption" id="caption" aria-live="polite"></div>
+  </div>
+  <aside>
+    <h1>God Terminal<small>Whisper turbo · Gemma 4 · Kokoro, all running on your Mac</small></h1>
+    <div class="mic">
+      <button id="mic" title="Talk">🎙</button>
+      <div><div id="status">Tap the mic and talk</div><div id="hint">Or hold Space. It stops on its own when you pause.</div></div>
+    </div>
+    <div class="toggles">
+      <label><input type="checkbox" id="handsfree"> Hands-free conversation</label>
+      <label><input type="checkbox" id="mono"> Single-colour dots</label>
+      <label><a href="#" id="reset" style="color:inherit">New chat</a></label>
+    </div>
+    <div id="log"><div class="empty">Try: “What animal purrs?” or “What should I eat tonight?”</div></div>
+  </aside>
+</main>
+<script>
+const N = 44;                          // dots per side
+const cv = document.getElementById('grid'), ctx = cv.getContext('2d');
+const $ = id => document.getElementById(id);
+const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+                set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
+$('handsfree').checked = store.get('handsfree') === '1';
+$('mono').checked = store.get('mono') === '1';
+
+// ---------- picture sampling ----------
+// Render an emoji (or the word itself as fallback) and sample it into dot targets on an N×N grid.
+function sample(emoji, word = '') {
+  const S = 512, big = document.createElement('canvas'); big.width = big.height = S;
+  const b = big.getContext('2d', { willReadFrequently: true });
+  b.textAlign = 'center'; b.textBaseline = 'middle';
+  if (emoji) { b.font = `400px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`; b.fillText(emoji, S / 2, S / 2 + 20); }
+  let box = bbox(b.getImageData(0, 0, S, S).data, S);
+  if (!box || box.area < S * S * 0.02) {         // emoji missing → draw the word in dots
+    b.clearRect(0, 0, S, S);
+    const font = px => `800 ${px}px -apple-system, system-ui, sans-serif`;
+    b.font = font(200);
+    b.font = font(Math.min(260, 200 * (S * 0.95) / b.measureText(word.toUpperCase()).width));
+    b.fillStyle = '#7cc4ff'; b.fillText(word.toUpperCase(), S / 2, S / 2);
+    box = bbox(b.getImageData(0, 0, S, S).data, S);
+    if (!box) return null;
+  }
+  const G = N * 8, g = document.createElement('canvas'); g.width = g.height = G;
+  const gc = g.getContext('2d', { willReadFrequently: true });
+  const scale = (G * 0.88) / Math.max(box.w, box.h), w = box.w * scale, h = box.h * scale;
+  gc.drawImage(big, box.x, box.y, box.w, box.h, (G - w) / 2, (G - h) / 2, w, h);
+  const px = gc.getImageData(0, 0, G, G).data, out = [];
+  for (let gy = 0; gy < N; gy++) for (let gx = 0; gx < N; gx++) {
+    let r = 0, gr = 0, bl = 0, a = 0;
+    for (let y = gy * 8; y < gy * 8 + 8; y++) for (let x = gx * 8; x < gx * 8 + 8; x++) {
+      const i = (y * G + x) * 4, al = px[i + 3] / 255;
+      r += px[i] * al; gr += px[i + 1] * al; bl += px[i + 2] * al; a += al;
+    }
+    if (a / 64 > 0.3) out.push({ x: gx + 0.5, y: gy + 0.5, cov: a / 64, c: [r / a, gr / a, bl / a] });
+  }
+  return out;
+}
+function bbox(d, S) {
+  let x0 = S, y0 = S, x1 = -1, y1 = -1, area = 0;
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) if (d[(y * S + x) * 4 + 3] > 40) {
+    area++; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+  }
+  return x1 < 0 ? null : { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1, area };
+}
+
+// ---------- particles that fly between pictures ----------
+const IDLE = [52, 60, 80], C = N / 2, TAU = Math.PI * 2;
+const parts = Array.from({ length: N * N }, () => ({
+  x: C, y: C, r: 0, c: [...IDLE], live: false, tw: -1e9, seed: Math.random() * 100,
+  fx: C, fy: C, fr: 0, fc: [...IDLE], tx: C, ty: C, tr: 0, tc: [...IDLE], cx: C, cy: C, t0: 0, dur: 1,
+}));
+const STYLES = ['swirl', 'burst', 'rain', 'vortex', 'scatter', 'wave'];
+let mode = 'idle', level = 0, current = null, lastStyle = '';
+let float = 0, noise = 0;            // thinking: how much the picture hovers, and how 'undiffused' it still is
+const bubbles = [];
+const ang = p => Math.atan2(p.y - C, p.x - C), dist = p => Math.hypot(p.x - C, p.y - C);
+const rnd = (a, b) => a + Math.random() * (b - a);
+
+function resize() { const s = cv.getBoundingClientRect().width * devicePixelRatio; cv.width = cv.height = Math.round(s); }
+addEventListener('resize', resize); resize();
+
+function tint(t) {
+  if (!$('mono').checked) return t.c;
+  const lum = (0.3 * t.c[0] + 0.59 * t.c[1] + 0.11 * t.c[2]) / 255;
+  return [124, 196, 255].map(v => Math.min(255, v * (0.45 + lum)));
+}
+
+// Send particle p on a curved flight to (tx, ty), ending at radius tr and colour tc.
+function fly(p, tx, ty, tr, tc, style, delay, dir, live) {
+  Object.assign(p, { fx: p.x, fy: p.y, fr: p.r, fc: [...p.c], tx, ty, tr, tc, live,
+    t0: performance.now() + delay, dur: rnd(620, 900) });
+  const mx = (p.x + tx) / 2, my = (p.y + ty) / 2;
+  if (style === 'swirl') {                       // arc around the centre
+    const a = Math.atan2(my - C, mx - C) + dir * rnd(0.9, 1.5), d = Math.hypot(mx - C, my - C) * 1.25 + 4;
+    p.cx = C + Math.cos(a) * d; p.cy = C + Math.sin(a) * d;
+  } else if (style === 'burst') {                // fling outward, then fall into place
+    p.cx = mx + (mx - C) * 0.9 + rnd(-4, 4); p.cy = my + (my - C) * 0.9 + rnd(-4, 4);
+  } else if (style === 'rain') {
+    p.cx = tx + rnd(-3, 3); p.cy = Math.min(p.y, ty) - rnd(2, 8);
+  } else if (style === 'vortex') {               // everything funnels through the middle
+    p.cx = C + rnd(-2, 2); p.cy = C + rnd(-2, 2);
+  } else if (style === 'wave') {
+    p.cx = mx + rnd(-2, 2); p.cy = my + dir * Math.sin(mx / 3) * 9;
+  } else if (style === 'diffuse') {             // dissolve into a noise cloud, then condense
+    p.cx = C + rnd(-N * 0.55, N * 0.55); p.cy = C + rnd(-N * 0.55, N * 0.55); p.dur = rnd(800, 1100);
+  } else { p.cx = mx + rnd(-N * 0.35, N * 0.35); p.cy = my + rnd(-N * 0.35, N * 0.35); }
+}
+
+// Where a new particle appears from, for each style.
+function spawn(p, style, t, dir) {
+  let x, y;
+  if (style === 'burst' || style === 'vortex') { x = C + rnd(-1, 1); y = C + rnd(-1, 1); }
+  else if (style === 'diffuse') { x = rnd(0, N); y = rnd(0, N); }
+  else if (style === 'rain') { x = t.x + rnd(-1, 1); y = rnd(-N * 0.6, -2); }
+  else if (style === 'wave') { x = dir > 0 ? rnd(-8, -2) : N + rnd(2, 8); y = t.y; }
+  else { const a = ang(t) + dir * 1.6, d = N * rnd(0.7, 0.9); x = C + Math.cos(a) * d; y = C + Math.sin(a) * d; }
+  Object.assign(p, { x, y, r: 0.04, c: [255, 255, 255] });
+}
+
+// Where a leaving particle goes.
+function exitTo(p, style, dir) {
+  if (style === 'diffuse') return [rnd(-4, N + 4), rnd(-4, N + 4)];
+  if (style === 'burst' || style === 'scatter') return [p.x + (p.x - C) * rnd(1, 2), p.y + (p.y - C) * rnd(1, 2)];
+  if (style === 'rain') return [p.x + rnd(-2, 2), N + rnd(2, 12)];
+  if (style === 'vortex') return [C, C];
+  if (style === 'wave') return [dir > 0 ? N + rnd(2, 10) : rnd(-10, -2), p.y];
+  const a = ang(p) + dir * 2.2, d = dist(p) * 1.8 + 6;
+  return [C + Math.cos(a) * d, C + Math.sin(a) * d];
+}
+
+function delayFor(style, t, dir) {
+  if (style === 'swirl') return (((ang(t) * dir + TAU * 2) % TAU) / TAU) * 380;
+  if (style === 'burst') return (dist(t) / C) * 320;
+  if (style === 'rain') return (t.x / N) * 200 + rnd(0, 220);
+  if (style === 'wave') return ((dir > 0 ? t.x : N - t.x) / N) * 380;
+  return rnd(0, 380);
+}
+
+// Morph whatever is on screen into a new set of targets (or into nothing).
+function morph(targets, forced) {
+  current = targets;
+  let style = forced;
+  if (!style) { do style = STYLES[Math.random() * STYLES.length | 0]; while (style === lastStyle); lastStyle = style; }
+  const dir = Math.random() < 0.5 ? 1 : -1;
+  const key = { swirl: ang, vortex: ang, burst: dist, rain: p => p.x, wave: p => p.x, scatter: () => Math.random(), diffuse: () => Math.random() }[style];
+  const live = parts.filter(p => p.live).sort((a, b) => key(a) - key(b));
+  const free = parts.filter(p => !p.live);
+  const tg = (targets || []).slice().sort((a, b) => key(a) - key(b));
+  const used = new Set(), pairs = [];
+  if (live.length >= tg.length) {
+    tg.forEach((t, i) => { const p = live[Math.floor(i * live.length / tg.length)]; used.add(p); pairs.push([p, t]); });
+  } else {
+    const slot = new Map(live.map((p, j) => [Math.floor(j * tg.length / live.length), p]));
+    let f = 0;
+    tg.forEach((t, i) => { let p = slot.get(i); if (!p) { p = free[f++]; spawn(p, style, t, dir); } used.add(p); pairs.push([p, t]); });
+  }
+  for (const [p, t] of pairs) fly(p, t.x, t.y, 0.2 + 0.25 * Math.min(1, t.cov), tint(t), style, delayFor(style, t, dir), dir, true);
+  for (const p of live) if (!used.has(p)) {
+    const [x, y] = exitTo(p, style, dir);
+    fly(p, x, y, 0, p.c, style, delayFor(style, p, dir) * 0.6, dir, false);
+  }
+}
+
+function frame(t) {
+  const W = cv.width, cell = W / N;
+  ctx.clearRect(0, 0, W, W);
+  // faint background grid that reacts to listening / thinking
+  const sweep = (t / 400) % TAU - Math.PI;
+  ctx.fillStyle = `rgb(${IDLE})`;
+  for (let gy = 0; gy < N; gy++) for (let gx = 0; gx < N; gx++) {
+    const d = Math.hypot(gx + 0.5 - C, gy + 0.5 - C);
+    let r = 0.09;
+    if (mode === 'listening') r += level * 0.22 * Math.max(0, Math.sin(t / 120 - d * 0.6));
+    else if (mode === 'thinking') {
+      const diff = Math.abs(((Math.atan2(gy + 0.5 - C, gx + 0.5 - C) - sweep + Math.PI * 3) % TAU) - Math.PI);
+      r += Math.max(0, 0.14 - diff * 0.14);
+    }
+    ctx.beginPath(); ctx.arc((gx + 0.5) * cell, (gy + 0.5) * cell, r * cell, 0, TAU); ctx.fill();
+  }
+  // thinking: the picture hovers like a ghost and jitters with fading noise, like diffusion denoising
+  float += ((mode === 'thinking' ? 1 : 0) - float) * 0.04;
+  noise *= 0.975;
+  const ox = float * Math.sin(t / 950) * 0.9, oy = float * Math.sin(t / 640) * 1.4;
+  const ghost = float * 0.35;
+  // particles
+  const glowing = [];
+  for (const p of parts) {
+    if (!p.live && p.r < 0.005 && t > p.t0 + p.dur) continue;
+    let k = (t - p.t0) / p.dur; k = k < 0 ? 0 : k > 1 ? 1 : k;
+    const e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2, u = 1 - e;
+    p.x = u * u * p.fx + 2 * u * e * p.cx + e * e * p.tx;
+    p.y = u * u * p.fy + 2 * u * e * p.cy + e * e * p.ty;
+    p.r = p.fr + (p.tr - p.fr) * e;
+    for (let j = 0; j < 3; j++) p.c[j] = p.fc[j] + (p.tc[j] - p.fc[j]) * e;
+    if (p.r < 0.005) continue;
+    const flying = k > 0 && k < 1 ? Math.sin(Math.PI * k) : 0;
+    if (mode === 'speaking' && p.live && !flying && Math.random() < 0.0025) p.tw = t;   // random twinkles
+    const twinkle = Math.max(0, 1 - (t - p.tw) / 350);
+    const white = Math.max(flying * 0.55, twinkle * 0.8, ghost * (0.6 + 0.4 * Math.sin(t / 300 + p.seed)));
+    const jit = noise * 1.8 + float * 0.12;
+    const dx = ox + jit * Math.sin(t / 110 + p.seed), dy = oy + jit * Math.cos(t / 135 + p.seed * 1.7);
+    let r = p.r * (1 + twinkle * 0.5);
+    if (mode === 'speaking' && p.live && !flying) r *= 1 + level * 0.8 * (0.6 + 0.4 * Math.sin(t / 90 - dist(p) * 0.5));
+    ctx.fillStyle = `rgb(${p.c.map(v => (v + (255 - v) * white) | 0)})`;
+    ctx.beginPath(); ctx.arc((p.x + dx) * cell, (p.y + dy) * cell, Math.max(0.5, r * cell), 0, TAU); ctx.fill();
+    if (white > 0.08) glowing.push((p.x + dx) * cell, (p.y + dy) * cell, r * cell, white, p.c);
+  }
+  // soft additive glow on dots in flight and twinkling ones
+  ctx.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < glowing.length; i += 5) {
+    const [x, y, r, w, c] = glowing.slice(i, i + 5);
+    ctx.fillStyle = `rgba(${c.map(v => v | 0)},${0.22 * w})`;
+    ctx.beginPath(); ctx.arc(x, y, r * 2.6, 0, TAU); ctx.fill();
+  }
+  // thought bubbles drifting up from the thinking shape
+  if (mode === 'thinking' && Math.random() < 0.18)
+    bubbles.push({ x: C + rnd(-9, 9), y: C - rnd(4, 12), r: rnd(0.12, 0.32), vy: rnd(0.035, 0.08), sway: rnd(0, TAU), life: 1 });
+  for (let i = bubbles.length - 1; i >= 0; i--) {
+    const b = bubbles[i];
+    b.y -= b.vy; b.life -= 0.009;
+    if (b.life <= 0 || b.y < -1) { bubbles.splice(i, 1); continue; }
+    const x = (b.x + Math.sin(t / 400 + b.sway) * 0.8 + ox) * cell, y = (b.y + oy) * cell, a = Math.min(1, b.life * 1.5);
+    ctx.strokeStyle = `rgba(200,225,255,${0.55 * a})`; ctx.lineWidth = Math.max(1, cell * 0.06);
+    ctx.beginPath(); ctx.arc(x, y, b.r * cell * 1.6, 0, TAU); ctx.stroke();
+    ctx.fillStyle = `rgba(200,225,255,${0.12 * a})`; ctx.fill();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+function showScene(s, msgEl) {
+  morph(s.targets);
+  msgEl?.querySelectorAll('mark').forEach(m => m.classList.toggle('now', m.dataset.w === s.word));
+}
+
+// ---------- thinking show: a floating genie/ghost that keeps brainstorming ----------
+const THINK_FACES = ['🧞', '👻', '💭', '💡', '🔮', '✨', '🪄', '🧠', '🌀', '🫧', '🌙', '🧞‍♀️', '🦋', '🌟'];
+const THINK_WORDS = ['hmm…', 'brainstorming…', 'thinking it over…', 'finding the right words…',
+                     'listening between the lines…', 'gathering thoughts…', 'dreaming up a reply…'];
+let thinkTimer = null;
+function startThinking() {
+  stopThinking();
+  const faces = [Math.random() < 0.5 ? '🧞' : '👻', ...THINK_FACES.slice(2).sort(() => Math.random() - 0.5)];
+  let n = 0;
+  const step = () => {
+    const face = faces[n % faces.length];
+    morph(sample(face, 'hmm'), 'diffuse');
+    noise = 1;                                   // fresh noise that settles as the shape forms
+    caption.thinking(THINK_WORDS[n % THINK_WORDS.length]);
+    n++;
+  };
+  step();
+  thinkTimer = setInterval(step, 1300);
+}
+function stopThinking() { clearInterval(thinkTimer); thinkTimer = null; }
+
+// ---------- word-by-word captions ----------
+// Split spoken words into short caption lines: break after a sentence, at a comma once a line is long
+// enough, or at 8 words.
+function captionLines(words) {
+  const lines = [[]];
+  words.forEach((w, i) => {
+    const line = lines[lines.length - 1];
+    line.push(i);
+    if (/[.?!]["”']?$/.test(w[0]) || (/,$/.test(w[0]) && line.length >= 5) || line.length >= 8) lines.push([]);
+  });
+  return lines.filter(l => l.length);
+}
+const caption = {
+  el: $('caption'), lines: [], lineOf: [], shown: -1, spans: [],
+  load(words, scenes) {
+    this.words = words; this.lines = captionLines(words); this.shown = -1;
+    this.emoji = Object.fromEntries(scenes.filter(s => s.i != null).map(s => [s.i, s.emoji]));
+    this.lineOf = []; this.lines.forEach((l, n) => l.forEach(i => this.lineOf[i] = n));
+    this.el.classList.remove('dim');
+  },
+  render(n) {
+    this.shown = n; this.spans = {};
+    this.el.innerHTML = '';
+    for (const i of this.lines[n]) {
+      const w = document.createElement('span');
+      w.className = 'w' + (this.emoji[i] ? ' pic' : ''); w.textContent = this.words[i][0];
+      this.el.append(w); this.spans[i] = { w };
+      if (this.emoji[i]) {
+        const e = document.createElement('span'); e.className = 'e'; e.textContent = this.emoji[i];
+        this.el.append(e); this.spans[i].e = e;
+      }
+    }
+  },
+  at(i) {                                        // word i is being spoken now
+    if (i < 0 || !this.lines.length) return;
+    if (this.lineOf[i] !== this.shown) this.render(this.lineOf[i]);
+    for (const j of this.lines[this.shown]) {
+      const s = this.spans[j];
+      s.w.classList.toggle('on', j <= i); s.w.classList.toggle('now', j === i);
+      s.e?.classList.toggle('on', j <= i);
+    }
+  },
+  done() { this.el.querySelectorAll('.now').forEach(w => w.classList.remove('now')); },
+  thinking(text) {
+    this.shown = -1; this.el.classList.remove('dim');
+    this.el.innerHTML = `<span class="think">${text}</span>`;
+  },
+  dim() { this.el.classList.add('dim'); },
+};
+function draw(emoji, word) { showScene({ emoji, word, targets: sample(emoji, word) }); }   // handy for testing
+$('mono').onchange = () => { store.set('mono', $('mono').checked ? '1' : '0'); if (current) morph(current); };
+
+// ---------- audio in / out ----------
+let actx, stream, analyser, rec, chunks = [], busy = false, recording = false, speakingSrc = null, heardVoice = false;
+function audioCtx() { return actx ||= new AudioContext(); }
+function rms(an) {
+  const buf = new Float32Array(an.fftSize); an.getFloatTimeDomainData(buf);
+  return Math.sqrt(buf.reduce((s, v) => s + v * v, 0) / buf.length);
+}
+function setStatus(s) { $('status').textContent = s; }
+
+async function startListening() {
+  if (busy || recording) return;
+  if (speakingSrc) { speakingSrc.stop(); speakingSrc = null; }
+  try { stream ||= await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }); }
+  catch { setStatus('Microphone blocked. Allow it in the browser and try again.'); return; }
+  const ac = audioCtx(); await ac.resume();
+  analyser = ac.createAnalyser(); analyser.fftSize = 1024;
+  ac.createMediaStreamSource(stream).connect(analyser);
+  rec = new MediaRecorder(stream); chunks = [];
+  rec.ondataavailable = e => e.data.size && chunks.push(e.data);
+  rec.onstop = send;
+  rec.start(); recording = true; mode = 'listening'; heardVoice = false; caption.dim();
+  $('mic').classList.add('rec'); setStatus('Listening…');
+  let quietSince = performance.now(), loudSince = 0, noise = 0.012;
+  const started = performance.now();
+  (function watch() {
+    if (!recording) return;
+    const now = performance.now(), v = rms(analyser); level = Math.min(1, v * 12);
+    if (now - started < 400) noise = Math.max(noise, v * 1.8);         // calibrate to the room
+    if (v > Math.max(0.025, noise)) {
+      loudSince ||= now;
+      if (now - loudSince > 250) heardVoice = true;                     // real speech, not a click or echo blip
+      quietSince = now;
+    } else loudSince = 0;
+    const total = now - started;
+    if (!spaceHeld && ((heardVoice && now - quietSince > 1100) || total > 20000 || (!heardVoice && total > 8000)))
+      return stopListening();
+    requestAnimationFrame(watch);
+  })();
+}
+function stopListening() {
+  if (!recording) return;
+  recording = false; level = 0; rec.stop();
+  $('mic').classList.remove('rec');
+}
+
+async function send() {
+  const blob = new Blob(chunks, { type: rec.mimeType });
+  if (!heardVoice || blob.size < 2000) {                                // nothing said: don't bother the AI
+    mode = 'idle'; setStatus($('handsfree').checked ? 'Waiting for you…' : 'Tap the mic and talk');
+    if ($('handsfree').checked) setTimeout(startListening, 300);
+    return;
+  }
+  busy = true; $('mic').disabled = true; mode = 'thinking'; setStatus('Thinking…'); startThinking();
+  try {
+    const fd = new FormData(); fd.append('audio', blob, 'speech.webm');
+    const res = await (await fetch('/talk', { method: 'POST', body: fd })).json().finally(stopThinking);
+    if (!res.heard) { mode = 'idle'; morph(null); caption.el.innerHTML = ''; setStatus("I didn't catch that. Try again."); }
+    else {
+      addMsg('you', 'You', esc(res.heard));
+      const scenes = res.scenes.map(s => ({ ...s, targets: sample(s.emoji, s.word) })).filter(s => s.targets);
+      const msg = addMsg('ai', 'Dot', highlight(res.reply, scenes.map(s => s.word)),
+        `${scenes.map(s => esc(s.emoji)).join(' ')} · hear ${res.timing.stt}s · think ${res.timing.llm}s · voice ${res.timing.tts}s`);
+      await play(res.audio, scenes, msg, res.words || []);
+    }
+  } catch (e) {
+    stopThinking(); setStatus('Something went wrong: ' + e.message); mode = 'idle'; busy = false; $('mic').disabled = false; return;
+  }
+  busy = false; $('mic').disabled = false; mode = 'idle'; level = 0;
+  setStatus('Tap the mic and talk');
+  if ($('handsfree').checked) setTimeout(startListening, 700);         // let the speaker's echo die away first
+}
+
+async function play(b64, scenes, msgEl, words = []) {
+  const ac = audioCtx(); await ac.resume();
+  const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+  const buf = await ac.decodeAudioData(bytes.buffer);
+  const src = ac.createBufferSource(), an = ac.createAnalyser(); an.fftSize = 1024;
+  src.buffer = buf; src.connect(an); an.connect(ac.destination);
+  speakingSrc = src; mode = 'speaking'; setStatus('Speaking…');
+  let on = true, next = 0;
+  const t0 = ac.currentTime + 0.05;
+  caption.load(words, scenes);
+  let wi = -1;
+  (function cue() {                                                     // switch pictures exactly as each word is said
+    if (!on) return;
+    const at = ac.currentTime - t0;
+    while (next < scenes.length && scenes[next].at <= at) showScene(scenes[next++], msgEl);
+    let w = wi;
+    while (w + 1 < words.length && words[w + 1][1] <= at + 0.04) w++;
+    if (w !== wi) caption.at(wi = w);
+    level = level * 0.6 + Math.min(1, rms(an) * 6) * 0.4;
+    requestAnimationFrame(cue);
+  })();
+  await new Promise(r => { src.onended = r; src.start(t0); });
+  on = false; speakingSrc = null;
+  msgEl?.querySelectorAll('mark.now').forEach(m => m.classList.remove('now'));
+  caption.done();
+}
+
+// ---------- UI ----------
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function highlight(text, words) {
+  let html = esc(text);
+  if (!words.length) return html;
+  const alt = words.map(w => esc(w).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+  return html.replace(new RegExp(`\\b(${alt})(\\w*)`, 'gi'),
+    (m, w) => `<mark data-w="${words.find(x => x.toLowerCase() === w.toLowerCase()) ?? w}">${m}</mark>`);
+}
+function addMsg(cls, who, html, meta) {
+  document.querySelector('#log .empty')?.remove();
+  const el = document.createElement('div'); el.className = 'msg ' + cls;
+  el.innerHTML = `<b>${who}</b>${html}${meta ? `<div class="t">${meta}</div>` : ''}`;
+  $('log').append(el); $('log').scrollTop = 1e9;
+  return el;
+}
+$('mic').onclick = () => recording ? stopListening() : startListening();
+let spaceHeld = false;
+addEventListener('keydown', e => {
+  if (e.code === 'Space' && !e.repeat && e.target.tagName !== 'INPUT') { e.preventDefault(); spaceHeld = true; startListening(); }
+});
+addEventListener('keyup', e => {
+  if (e.code === 'Space' && spaceHeld) { spaceHeld = false; heardVoice = true; stopListening(); }
+});
+$('handsfree').onchange = () => store.set('handsfree', $('handsfree').checked ? '1' : '0');
+$('reset').onclick = async e => {
+  e.preventDefault(); await fetch('/reset', { method: 'POST' });
+  $('log').innerHTML = '<div class="empty">New chat started.</div>';
+  morph(null); caption.el.innerHTML = '';
+};
+setTimeout(() => draw('👋', 'hi'), 300);
+</script>
+</body>
+</html>
