@@ -1,4 +1,4 @@
-"""Pick 2-3 picturable words per sentence from Dot's reply and match each to an emoji, locally.
+"""Pick 2-3 picturable words per sentence from Boo's reply and match each to an emoji, locally.
 
 Uses spaCy to find meaningful words and the emojilib keyword list (emoji-keywords.json) to find a picture.
 """
@@ -30,11 +30,15 @@ EXTRA = {
     "body": "🧍", "attention": "👀", "exhausting": "😩", "draining": "🪫", "drained": "🪫", "commitment": "📅",
     "wind": "🌬️", "quiet": "🤫", "silence": "🤫", "earth": "🌍", "lamp": "🪔", "backpack": "🎒", "fire": "🔥",
     "garden": "🌻", "bridge": "🌉", "door": "🚪", "window": "🪟", "road": "🛣️", "ground": "🌍", "nature": "🌿",
+    "place": "📍", "water": "💧", "gray": "🌫️", "grey": "🌫️", "rhythm": "🎵", "sit": "🪑", "sitting": "🪑",
+    "cool": "🍃", "stream": "🏞️", "warmth": "🔥", "warm": "🔥", "ache": "💔", "comfort": "🧸", "comforting": "🧸",
+    "routine": "🔁", "senses": "👂", "adrift": "🛶", "muted": "🌫️", "moon": "🌙", "star": "⭐",
+    "hoping": "🌈", "bottle": "🫙", "landscape": "🌄", "newness": "✨", "light": "🕯️",
     "settle": "🍂", "lift": "🎈", "pile": "📚", "hold": "🤲", "hand": "🤲", "shoulder": "💆", "music": "🎵",
 }
 SKIP = {"thing", "way", "lot", "part", "kind", "sort", "bit", "something", "anything", "everything",
         "sound", "seem", "make", "get", "go", "say", "know", "want", "need", "let", "take", "come", "like",
-        "be", "have", "do", "right", "good", "little", "much", "many", "more", "most", "one", "point", "wear", "new", "person", "show", "small", "big", "different", "catch", "find", "look", "tend", "try", "keep", "describe", "feel", "blow", "source", "recently", "lately"}
+        "be", "have", "do", "right", "good", "little", "much", "many", "more", "most", "one", "point", "wear", "new", "person", "show", "small", "big", "different", "catch", "find", "look", "tend", "try", "keep", "describe", "feel", "blow", "single", "sense", "wide", "edge", "seeing", "source", "recently", "lately"}
 WEIGHT = {"NOUN": 3, "PROPN": 2, "ADJ": 2, "VERB": 1}
 
 nlp = spacy.load("en_core_web_sm", disable=["ner"])
@@ -59,9 +63,13 @@ INDEX = _build_index()
 
 
 def lookup(token) -> str | None:
-    for w in (token.lemma_.lower(), token.text.lower()):
-        if w in SKIP or len(w) < 3:
-            return None
+    text, lemma = token.text.lower(), token.lemma_.lower()
+    if lemma in SKIP or text in SKIP or len(text) < 3:
+        return None
+    for w in (text, lemma):  # hand-picked words first: spaCy lemmatizes "hoping" as "hop"
+        if w in EXTRA:
+            return EXTRA[w]
+    for w in (lemma, text):
         if w in INDEX:
             return INDEX[w]
     return None

@@ -23,6 +23,17 @@ EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
 IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+## Nunito font (`static/fonts/nunito-latin.woff2`)
+
+https://github.com/googlefonts/nunito. Copyright 2014 The Nunito Project Authors.
+Licensed under the SIL Open Font License 1.1; the full text is in `static/fonts/OFL.txt`.
+
+## Bundled in the Mac app only (`macos/build.sh`), not in this repository
+
+- Ollama runtime: MIT (https://github.com/ollama/ollama), with its bundled licenses for llama.cpp, MLX and others
+- Python (python-build-standalone): PSF License
+- Python packages from `requirements.txt`, under their own licenses
+
 ## Models (downloaded at runtime, not included in this repository)
 
 - Whisper large-v3-turbo: MIT (OpenAI)

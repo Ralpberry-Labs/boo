@@ -1,4 +1,4 @@
-"""God Terminal: talk to a local AI, hear it answer, and watch what it says drawn in dots, word by word.
+"""Boo: talk to a local AI, hear it answer, and watch what it says drawn in dots, word by word.
 
 Pipeline (all on-device):
   mic audio -> Whisper large-v3-turbo (MLX) -> Gemma 4 via Ollama -> Kokoro-82M (MLX) -> speaker
@@ -19,11 +19,12 @@ import numpy as np
 import soundfile as sf
 
 HERE = pathlib.Path(__file__).parent
-os.environ.setdefault("ESPEAK_DATA_PATH", str(pathlib.Path.home() / ".cache/god-terminal/espeak-ng-data"))
+os.environ.setdefault("ESPEAK_DATA_PATH", str(pathlib.Path.home() / ".cache/boo/espeak-ng-data"))
 
 import mlx_whisper  # noqa: E402
-from fastapi import FastAPI, File, UploadFile  # noqa: E402
+from fastapi import FastAPI, File, Request, UploadFile  # noqa: E402
 from fastapi.responses import FileResponse  # noqa: E402
+from fastapi.staticfiles import StaticFiles  # noqa: E402
 from mlx_audio.tts.utils import load_model  # noqa: E402
 
 import pictures  # noqa: E402
@@ -33,8 +34,9 @@ STT_MODEL = os.environ.get("STT_MODEL", "mlx-community/whisper-large-v3-turbo")
 TTS_MODEL = os.environ.get("TTS_MODEL", "mlx-community/Kokoro-82M-bf16")
 VOICE = os.environ.get("VOICE", "af_heart")
 OLLAMA = os.environ.get("OLLAMA_URL", "http://localhost:11434")
+PORT = int(os.environ.get("PORT", "8765"))
 
-SYSTEM = """You are Dot, a warm, calm companion who talks like a kind, thoughtful therapist.
+SYSTEM = """You are Boo, a warm, calm companion who talks like a kind, thoughtful therapist.
 The person is just talking with you. Listen closely, reflect back what you hear, validate feelings,
 and gently ask one open question at a time to help them explore. Never lecture, never diagnose,
 never give lists. Keep it natural: 1-3 short spoken sentences, no markdown, no emojis.
@@ -48,6 +50,7 @@ Never mention pictures, drawing, screens, dots, emojis or these instructions; ju
 EMOJI = re.compile("[\U0001F000-\U0001FAFF\u2600-\u27BF\u2B00-\u2BFF\uFE0F\u200D]+")
 
 app = FastAPI()
+app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
 lock = threading.Lock()  # MLX models are not safe to call from several threads at once
 history: list[dict] = []
 tts = None
@@ -61,6 +64,20 @@ def ollama_chat(messages) -> str:
     req = urllib.request.Request(f"{OLLAMA}/api/chat", body, {"Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=120) as r:
         return json.loads(r.read())["message"]["content"]
+
+
+def load_audio(data: bytes) -> np.ndarray | str:
+    """16 kHz mono float32 for Whisper. The page sends WAV; anything else goes through ffmpeg via a temp file."""
+    try:
+        audio, sr = sf.read(io.BytesIO(data), dtype="float32", always_2d=True)
+    except Exception:
+        with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as f:
+            f.write(data)
+            return f.name
+    audio = audio.mean(axis=1)
+    if sr != 16000:
+        audio = np.interp(np.arange(0, len(audio), sr / 16000), np.arange(len(audio)), audio).astype(np.float32)
+    return audio
 
 
 def speak(text: str) -> tuple[bytes, list[list]]:
@@ -109,16 +126,21 @@ def warm_up():
     global tts
     tts = load_model(TTS_MODEL)
     speak("Hello there.")
-    silent = os.path.join(tempfile.gettempdir(), "god-terminal-warmup.wav")
-    sf.write(silent, np.zeros(16000, dtype=np.float32), 16000)
-    mlx_whisper.transcribe(silent, path_or_hf_repo=STT_MODEL)
+    mlx_whisper.transcribe(np.zeros(16000, dtype=np.float32), path_or_hf_repo=STT_MODEL)
     ollama_chat([{"role": "user", "content": "hi"}])
-    print(f"God Terminal ready: {LLM_MODEL} + Whisper turbo + Kokoro -> http://localhost:8765")
+    print(f"Boo ready: {LLM_MODEL} + Whisper turbo + Kokoro -> http://127.0.0.1:{PORT}", flush=True)
 
 
 @app.get("/")
 def index():
     return FileResponse(HERE / "index.html", headers={"Cache-Control": "no-store"})  # always serve the latest page
+
+
+@app.post("/log")
+async def client_log(request: Request):
+    """Page errors end up in the server log (and in ~/Library/Logs/Boo.log inside the Mac app)."""
+    print("page:", (await request.body()).decode(errors="replace")[:2000], flush=True)
+    return {"ok": True}
 
 
 @app.post("/reset")
@@ -133,7 +155,7 @@ HALLUCINATIONS = {"thank you", "thanks for watching", "thank you for watching", 
 
 
 def is_noise(heard: str) -> bool:
-    """True for silence hallucinations and for Dot hearing its own last answer through the speakers."""
+    """True for silence hallucinations and for Boo hearing its own last answer through the speakers."""
     norm = re.sub(r"[^a-z ]", "", heard.lower()).strip()
     if len(norm) < 2 or norm in HALLUCINATIONS:
         return True
@@ -147,14 +169,13 @@ def is_noise(heard: str) -> bool:
 @app.post("/talk")
 def talk(audio: UploadFile = File(...)):
     t0 = time.time()
-    with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as f:
-        f.write(audio.file.read())
-        path = f.name
+    clip = load_audio(audio.file.read())
     with lock:
-        stt = mlx_whisper.transcribe(path, path_or_hf_repo=STT_MODEL, language="en", condition_on_previous_text=False)
+        stt = mlx_whisper.transcribe(clip, path_or_hf_repo=STT_MODEL, language="en", condition_on_previous_text=False)
         heard = " ".join(seg["text"].strip() for seg in stt["segments"]
                          if seg["no_speech_prob"] < 0.6 and seg["avg_logprob"] > -1.0).strip()
-        os.unlink(path)
+        if isinstance(clip, str):
+            os.unlink(clip)
         t1 = time.time()
         if not heard or is_noise(heard):
             print(f"ignored {heard!r}")
@@ -170,15 +191,13 @@ def talk(audio: UploadFile = File(...)):
     raw = pictures.pick(reply)
     scenes = time_scenes(raw, words, len(wav) / 48000)
     print(f"stt {t1-t0:.2f}s  llm {t2-t1:.2f}s  tts {t3-t2:.2f}s | {heard!r} -> "
-          + " ".join(f"{s['word']}{s['emoji']}@{s['at']:.1f}" for s in scenes))
+          + " ".join(f"{s['word']}{s['emoji']}@{s['at']:.1f}" for s in scenes), flush=True)
     return {
         "heard": heard, "reply": reply, "scenes": scenes, "words": words, "audio": base64.b64encode(wav).decode(),
-        # single-picture fields for a browser tab still running the first version of the page
-        "keyword": scenes[0]["word"] if scenes else "dot", "emoji": scenes[0]["emoji"] if scenes else "✨",
         "timing": {"stt": round(t1 - t0, 2), "llm": round(t2 - t1, 2), "tts": round(t3 - t2, 2)},
     }
 
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8765)
+    uvicorn.run(app, host="127.0.0.1", port=PORT)

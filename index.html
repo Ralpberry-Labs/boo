@@ -3,11 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>God Terminal</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;800&display=swap" rel="stylesheet">
+<title>Boo</title>
 <style>
+  @font-face { font-family: Nunito; src: url(/static/fonts/nunito-latin.woff2) format("woff2");
+    font-weight: 200 1000; font-display: swap; }
   :root {
     --bg: #0b0d12; --panel: #141821; --line: #232937; --text: #e8ebf2; --muted: #8a93a6;
     --accent: #7cc4ff; --you: #ffd27c; --rec: #ff5c6c;
@@ -84,7 +83,7 @@
     <div class="caption" id="caption" aria-live="polite"></div>
   </div>
   <aside>
-    <h1>God Terminal<small>Whisper turbo · Gemma 4 · Kokoro, all running on your Mac</small></h1>
+    <h1>Boo<small>Whisper turbo · Gemma 4 · Kokoro, all running on your Mac</small></h1>
     <div class="mic">
       <button id="mic" title="Talk">🎙</button>
       <div><div id="status">Tap the mic and talk</div><div id="hint">Or hold Space. It stops on its own when you pause.</div></div>
@@ -97,6 +96,11 @@
     <div id="log"><div class="empty">Try: “What animal purrs?” or “What should I eat tonight?”</div></div>
   </aside>
 </main>
+<script>
+const report = msg => { try { navigator.sendBeacon('/log', String(msg)); } catch {} };
+addEventListener('error', e => report(`${e.message} @ ${e.filename}:${e.lineno}`));
+addEventListener('unhandledrejection', e => report(`unhandled: ${e.reason?.stack || e.reason}`));
+</script>
 <script>
 const N = 44;                          // dots per side
 const cv = document.getElementById('grid'), ctx = cv.getContext('2d');
@@ -324,7 +328,7 @@ const THINK_WORDS = ['hmm…', 'brainstorming…', 'thinking it over…', 'findi
 let thinkTimer = null;
 function startThinking() {
   stopThinking();
-  const faces = [Math.random() < 0.5 ? '🧞' : '👻', ...THINK_FACES.slice(2).sort(() => Math.random() - 0.5)];
+  const faces = ['👻', ...THINK_FACES.filter(f => f !== '👻').sort(() => Math.random() - 0.5)];   // Boo always starts as a ghost
   let n = 0;
   const step = () => {
     const face = faces[n % faces.length];
@@ -444,13 +448,13 @@ async function send() {
   }
   busy = true; $('mic').disabled = true; mode = 'thinking'; setStatus('Thinking…'); startThinking();
   try {
-    const fd = new FormData(); fd.append('audio', blob, 'speech.webm');
+    const fd = new FormData(); fd.append('audio', await toWav16k(blob), 'speech.wav');
     const res = await (await fetch('/talk', { method: 'POST', body: fd })).json().finally(stopThinking);
     if (!res.heard) { mode = 'idle'; morph(null); caption.el.innerHTML = ''; setStatus("I didn't catch that. Try again."); }
     else {
       addMsg('you', 'You', esc(res.heard));
       const scenes = res.scenes.map(s => ({ ...s, targets: sample(s.emoji, s.word) })).filter(s => s.targets);
-      const msg = addMsg('ai', 'Dot', highlight(res.reply, scenes.map(s => s.word)),
+      const msg = addMsg('ai', 'Boo', highlight(res.reply, scenes.map(s => s.word)),
         `${scenes.map(s => esc(s.emoji)).join(' ')} · hear ${res.timing.stt}s · think ${res.timing.llm}s · voice ${res.timing.tts}s`);
       await play(res.audio, scenes, msg, res.words || []);
     }
@@ -460,6 +464,24 @@ async function send() {
   busy = false; $('mic').disabled = false; mode = 'idle'; level = 0;
   setStatus('Tap the mic and talk');
   if ($('handsfree').checked) setTimeout(startListening, 700);         // let the speaker's echo die away first
+}
+
+// Decode the recording in the browser and send 16 kHz mono WAV, so the server needs no ffmpeg.
+async function toWav16k(blob) {
+  try {
+    const src = await audioCtx().decodeAudioData(await blob.arrayBuffer());
+    const off = new OfflineAudioContext(1, Math.ceil(src.duration * 16000), 16000);
+    const node = off.createBufferSource(); node.buffer = src; node.connect(off.destination); node.start();
+    const pcm = (await off.startRendering()).getChannelData(0);
+    const buf = new ArrayBuffer(44 + pcm.length * 2), v = new DataView(buf);
+    const str = (o, t) => [...t].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+    str(0, 'RIFF'); v.setUint32(4, 36 + pcm.length * 2, true); str(8, 'WAVEfmt ');
+    v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+    v.setUint32(24, 16000, true); v.setUint32(28, 32000, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+    str(36, 'data'); v.setUint32(40, pcm.length * 2, true);
+    pcm.forEach((x, i) => v.setInt16(44 + i * 2, Math.max(-1, Math.min(1, x)) * 0x7fff, true));
+    return new Blob([buf], { type: 'audio/wav' });
+  } catch { return blob; }                                             // server falls back to ffmpeg
 }
 
 async function play(b64, scenes, msgEl, words = []) {
