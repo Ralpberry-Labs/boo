@@ -5,6 +5,11 @@ caring companion, and paints what it says as a living dot grid: the picture morp
 sentence, exactly as each word is spoken, with word-by-word captions and emojis. While it thinks,
 the dots float like a ghost and "brainstorm" through dreamy shapes.
 
+**Genie avatar mode** (on by default, toggle under the mic) puts a living character on the grid: a dot-drawn
+genie who blinks, lip-syncs every word, nods and gestures on the beat, cups an ear while you talk, taps her chin
+while she thinks (with the brainstorm floating in a thought cloud), and conjures each picture out of her palm.
+Left alone, she fidgets: glances at your cursor, winks, giggles, twirls sparkles, stretches.
+
 Free, local and open source. No cloud APIs, no account, nothing leaves your Mac.
 
 Real-time diffusion video models are beautiful, but too heavy to run comfortably on a laptop.
@@ -57,6 +62,7 @@ extra disk. Logs go to `~/Library/Logs/Boo.log`.
 - `server.py`: FastAPI server: speech-to-text, chat, text-to-speech with word timings, echo and silence filtering
 - `pictures.py`: picks 2-3 picturable words per sentence and matches each to an emoji
 - `index.html`: the page: mic capture, particle morphs, thinking animation, captions
+- `static/avatar.js`: the genie avatar: a procedural rig (springs, two-bone arms, blinks, visemes) drawn each frame and shown as dots
 - `emoji-keywords.json`: emoji keyword list from [emojilib](https://github.com/muan/emojilib)
 - `static/fonts/`: Nunito, bundled so the app works offline
 - `macos/`: the native app shell (`Boo.swift`), its launcher (`boot.py`), icon and build script
