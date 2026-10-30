@@ -56,7 +56,7 @@ function makeHer({ canvas, N, getMode, getLevel, hasPicture, release }) {
   const P = {};
   const def = (n, v, k = 120, c = 16) => (P[n] = { v, vel: 0, to: v, k, c });
   def('yaw', 0, 60, 12); def('pitch', 0, 140, 13); def('roll', 0, 60, 11); def('bx', 0, 30, 10); def('bob', 0, 160, 12); def('shUp', 0, 90, 12);
-  for (const n of MOUTHS) def('m_' + n, n === 'neutral' ? 1 : 0, 900, 55);
+  for (const n of MOUTHS) def('m_' + n, n === 'neutral' ? 1 : 0, 260, 33);   // critically damped: no overshoot, no flicker
   for (const n of EYES) def('e_' + n, n === 'neutral' ? 1 : 0, 260, 30);
   def('think', 0, 40, 12); def('listen', 0, 40, 12); def('hold', 0, 40, 12);
   const V = n => P[n].v;
@@ -109,9 +109,10 @@ function makeHer({ canvas, N, getMode, getLevel, hasPicture, release }) {
     const wts = ph.map(p => (VOWEL.has(p) ? 2 : 1)), tot = wts.reduce((a, b) => a + b, 0);
     let acc = 0, k = 0;
     while (k < ph.length - 1 && (acc + wts[k]) / tot <= frac) acc += wts[k++];
-    const blend = smooth(((frac * tot - acc) / wts[k] - .55) / .45) * .6, out = {};
-    for (const [n, w] of Object.entries(VIS[ph[k]])) out[n] = (out[n] || 0) + w * (1 - blend);
-    for (const [n, w] of Object.entries(VIS[ph[k + 1] || 'sil'])) out[n] = (out[n] || 0) + w * blend;
+    const blend = smooth(((frac * tot - acc) / wts[k] - .35) / .65) * .6, out = {};
+    const soft = p => (VOWEL.has(p) || p === 'PP' || p === 'ou' ? 1 : .45);   // consonants only nudge the mouth
+    for (const [n, w] of Object.entries(VIS[ph[k]])) out[n] = (out[n] || 0) + w * (1 - blend) * soft(ph[k]);
+    for (const [n, w] of Object.entries(VIS[ph[k + 1] || 'sil'])) out[n] = (out[n] || 0) + w * blend * soft(ph[k + 1] || 'sil');
     return out;
   }
 
@@ -171,7 +172,7 @@ function makeHer({ canvas, N, getMode, getLevel, hasPicture, release }) {
       T.think = 1; T.roll += thinkSide * .05; mouth.mm = .6; energy = .5;
     } else if (mode === 'speaking') {
       energy *= .55 + lvlS * 1.2;
-      const gate = lvl < .035 ? .2 : clamp(.35 + lvl * 1.1, .2, 1);
+      const gate = smooth((lvlS - .02) / .12) * clamp(.45 + lvlS * 1.1, .45, 1);   // follows the smoothed voice, no hard cut
       for (const [n, w] of Object.entries(visemeMix(sp.frac, sp.ph))) mouth[n] = (mouth[n] || 0) + w * gate;
       for (const [n, w] of Object.entries(e.mouth || {})) mouth[n] = (mouth[n] || 0) + w;
       if (lvl - lvlPrev > .12 && lvl > .3) { P.pitch.vel += rnd(2, 4) * (e.energy || 1); if (expr === 'excited') P.bob.vel -= 5; }
