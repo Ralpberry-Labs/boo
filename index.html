@@ -90,7 +90,7 @@
     </div>
     <div class="toggles">
       <label><input type="checkbox" id="handsfree"> Hands-free conversation</label>
-      <label>Avatar <select id="look"><option value="portrait">Her</option><option value="genie">Genie</option><option value="dots">Classic dots</option></select></label>
+      <label>Avatar <select id="look"><option value="her">Her</option><option value="genie">Genie</option><option value="dots">Classic dots</option></select></label>
       <label><input type="checkbox" id="mono"> Single-colour dots</label>
       <label><a href="#" id="reset" style="color:inherit">New chat</a></label>
     </div>
@@ -103,7 +103,7 @@ addEventListener('error', e => report(`${e.message} @ ${e.filename}:${e.lineno}`
 addEventListener('unhandledrejection', e => report(`unhandled: ${e.reason?.stack || e.reason}`));
 </script>
 <script src="/static/avatar.js"></script>
-<script src="/static/portrait.js"></script>
+<script src="/static/her.js"></script>
 <script>
 const N = 44;                          // dots per side
 const cv = document.getElementById('grid'), ctx = cv.getContext('2d');
@@ -112,7 +112,7 @@ const store = { get(k) { try { return localStorage.getItem(k); } catch { return 
                 set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
 $('handsfree').checked = store.get('handsfree') !== '0';
 $('mono').checked = store.get('mono') === '1';
-let look = ['portrait', 'genie', 'dots'].includes(store.get('look')) ? store.get('look') : 'portrait';
+let look = ['her', 'genie', 'dots'].includes(store.get('look')) ? store.get('look') : 'her';
 let avatarOn = look !== 'dots';
 $('look').value = look;
 
@@ -346,8 +346,8 @@ function drawBubbles(t, cell) {
 }
 const hooks = { canvas: cv, N, getMode: () => mode, getLevel: () => level,
   hasPicture: () => !!current?.length, release: () => morph(null, 'conjure') };
-const avatars = { portrait: makePortrait(hooks), genie: makeAvatar(hooks) };
-let avatar = avatars[look] || avatars.portrait;
+const avatars = { her: makeHer(hooks), genie: makeAvatar(hooks) };
+let avatar = avatars[look] || avatars.her;
 requestAnimationFrame(frame);
 
 function showScene(s, msgEl) {
@@ -550,8 +550,9 @@ async function play(b64, scenes, msgEl, words = []) {
     while (w + 1 < words.length && words[w + 1][1] <= at + 0.04) w++;
     if (w !== wi) caption.at(wi = w);
     if (w >= 0) {                                                       // lip sync: which letter of the word is being said
-      const s = words[w][1], e = words[w + 1]?.[1] ?? s + 0.45;
-      avatar.speech(w, words[w][0], (at - s) / Math.max(0.05, e - s));
+      const s = words[w][1], next = words[w + 1]?.[1] ?? s + 0.6;
+      const dur = Math.min(next - s, 0.12 + words[w][0].length * 0.075);   // the mouth closes in pauses
+      avatar.speech(w, words[w][0], (at - s) / Math.max(0.05, dur));
     }
     level = level * 0.6 + Math.min(1, rms(an) * 6) * 0.4;
     if ($('handsfree').checked && analyser && at > 0.3) {              // barge-in: you talking over Boo stops her

@@ -9,9 +9,11 @@ the dots float like a ghost and "brainstorm" through dreamy shapes.
 buttons. Talk over her (or tap her) to cut in, just like ChatGPT's voice mode.
 
 **Pick an avatar** under the mic:
-- **Her** (default): a drawn character turned into dots and brought to life: she breathes, sways, blinks, lip-syncs
-  every word, blushes, nods on the beat, her hair ripples, sound rings pulse while you talk, the brainstorm floats in a
-  thought cloud while she thinks, and each picture appears where she is looking.
+- **Her** (default): a front-facing anime girl shown as dots who feels like a person on a call. Her mouth and eyes
+  blend live between real expression frames (neutral, ah, ee, oh, oo, pressed lips, blink, happy, surprised), driven by
+  15-viseme lip sync with coarticulation and an emotion per sentence. She keeps eye contact, glances away while
+  thinking or starting a thought, blinks at phrase breaks, nods with the energy of her voice, breathes (with an
+  inhale before she speaks), nods along while you talk, and the pictures appear above her head.
 - **Genie**: a procedurally animated dot genie who gestures, cups an ear while you talk, taps her chin while she
   thinks, conjures pictures from her palm, and fidgets when idle.
 - **Classic dots**: just the morphing pictures.
@@ -68,7 +70,7 @@ extra disk. Logs go to `~/Library/Logs/Boo.log`.
 - `server.py`: FastAPI server: speech-to-text, chat, text-to-speech with word timings, echo and silence filtering
 - `pictures.py`: picks 2-3 picturable words per sentence and matches each to an emoji
 - `index.html`: the page: mic capture, particle morphs, thinking animation, captions
-- `static/portrait.js`, `static/portrait.png`: the portrait avatar and its drawing (background removed)
+- `static/her.js`, `static/her.png`, `static/her-face.png`: the main avatar, her picture and her expression frames
 - `static/avatar.js`: the dot renderer both avatars share, and the genie: a procedural rig (springs, two-bone arms, blinks, visemes)
 - `emoji-keywords.json`: emoji keyword list from [emojilib](https://github.com/muan/emojilib)
 - `static/fonts/`: Nunito, bundled so the app works offline
