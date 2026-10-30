@@ -1,6 +1,43 @@
 // Boo's genie: a little character drawn procedurally every frame, then shown as a grid of dots.
 // The page tells her what is happening (listening, thinking, saying a word, showing a picture) and she acts
 // it out: she blinks, lip-syncs, gestures on the beat, fidgets when idle, and conjures pictures from her palm.
+// Shared by both avatars: turn a small drawing into coloured dots, bright parts big and dark parts small, with a
+// sheen sweeping across and rare twinkles. wobble(r, g, b, x, y) may nudge a dot, e.g. to make hair ripple.
+function halftone(ctx, g, M, W, t, wobble) {
+  const TAU = Math.PI * 2, d = g.getImageData(0, 0, M, M).data, cell = W / M, groups = new Map();
+  const sheen = (t / 14) % (2 * M + 130) - 100, tick = Math.floor(t / 110);
+  for (let y = 0; y < M; y++) for (let x = 0; x < M; x++) {
+    const i = (y * M + x) * 4, a = d[i + 3] / 255;
+    if (a < .05) continue;
+    let r = d[i], gr = d[i + 1], b = d[i + 2];
+    const lum = (.3 * r + .59 * gr + .11 * b) / 255;
+    const tw = (((x * 73856093) ^ (y * 19349663) ^ (tick * 83492791)) >>> 0) % 1000 < 3 ? 1 : 0;   // rare twinkles
+    const lift = Math.max(Math.max(0, 1 - Math.abs(x + y - sheen) / 6) * .5, tw * .8);               // a sheen sweeps across
+    const [dx, dy] = wobble ? wobble(r, gr, b, x, y) : [0, 0];
+    r += (255 - r) * lift; gr += (255 - gr) * lift; b += (255 - b) * lift;
+    const rad = cell * .48 * a * (.16 + .84 * Math.pow(lum, .85)) * (1 + tw * .3);
+    const key = ((r >> 3) << 10) | ((gr >> 3) << 5) | (b >> 3);
+    let p = groups.get(key);
+    if (!p) groups.set(key, p = new Path2D());
+    const cx = (x + .5 + dx) * cell, cy = (y + .5 + dy) * cell;
+    p.moveTo(cx + rad, cy); p.arc(cx, cy, rad, 0, TAU);
+  }
+  for (const [k, p] of groups) {
+    ctx.fillStyle = `rgb(${(k >> 10) << 3 | 4},${((k >> 5) & 31) << 3 | 4},${(k & 31) << 3 | 4})`;
+    ctx.fill(p);
+  }
+}
+
+function star(ctx, x, y, R, r, rot) {
+  ctx.beginPath();
+  for (let i = 0; i < 8; i++) {
+    const a = rot + i * Math.PI / 4, d = i % 2 ? r : R;
+    ctx.lineTo(x + Math.cos(a) * d, y + Math.sin(a) * d);
+  }
+  ctx.fill();
+}
+
+
 function makeAvatar({ canvas, N, getMode, getLevel, hasPicture, release }) {
   const M = 96, TAU = Math.PI * 2;                     // dots per side of the avatar grid; drawing units are 0..100
   const rnd = (a, b) => a + Math.random() * (b - a), clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -485,39 +522,6 @@ function makeAvatar({ canvas, N, getMode, getLevel, hasPicture, release }) {
     }
   }
 
-  function dots(ctx, W, t) {
-    const d = g.getImageData(0, 0, M, M).data, cell = W / M, groups = new Map();
-    const sheen = (t / 14) % 320 - 100, tick = Math.floor(t / 110);
-    for (let y = 0; y < M; y++) for (let x = 0; x < M; x++) {
-      const i = (y * M + x) * 4, a = d[i + 3] / 255;
-      if (a < .05) continue;
-      let r = d[i], gr = d[i + 1], b = d[i + 2];
-      const lum = (.3 * r + .59 * gr + .11 * b) / 255;
-      const tw = (((x * 73856093) ^ (y * 19349663) ^ (tick * 83492791)) >>> 0) % 1000 < 3 ? 1 : 0;   // rare twinkles
-      const lift = Math.max(Math.max(0, 1 - Math.abs(x + y - sheen) / 6) * .5, tw * .8);               // a sheen sweeps across
-      r += (255 - r) * lift; gr += (255 - gr) * lift; b += (255 - b) * lift;
-      const rad = cell * .48 * a * (.16 + .84 * Math.pow(lum, .85)) * (1 + tw * .3);
-      const key = ((r >> 3) << 10) | ((gr >> 3) << 5) | (b >> 3);
-      let p = groups.get(key);
-      if (!p) groups.set(key, p = new Path2D());
-      const cx = (x + .5) * cell, cy = (y + .5) * cell;
-      p.moveTo(cx + rad, cy); p.arc(cx, cy, rad, 0, TAU);
-    }
-    for (const [k, p] of groups) {
-      ctx.fillStyle = `rgb(${(k >> 10) << 3 | 4},${((k >> 5) & 31) << 3 | 4},${(k & 31) << 3 | 4})`;
-      ctx.fill(p);
-    }
-  }
-
-  function star(ctx, x, y, R, r, rot) {
-    ctx.beginPath();
-    for (let i = 0; i < 8; i++) {
-      const a = rot + i * Math.PI / 4, d = i % 2 ? r : R;
-      ctx.lineTo(x + Math.cos(a) * d, y + Math.sin(a) * d);
-    }
-    ctx.fill();
-  }
-
   rig(0, 0);
 
   return {
@@ -532,7 +536,7 @@ function makeAvatar({ canvas, N, getMode, getLevel, hasPicture, release }) {
       ctx.globalAlpha = .2; ctx.drawImage(halo, 0, 0, W, W);      // soft magic glow around her
       ctx.globalAlpha = .08; ctx.drawImage(src, 0, 0, W, W);
       ctx.restore();
-      dots(ctx, W, t);
+      halftone(ctx, g, M, W, t);
     },
     overlay(ctx, W) {                                  // sparkles drawn over everything, not snapped to the grid
       const k = W / 100;

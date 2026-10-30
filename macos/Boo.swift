@@ -1,6 +1,7 @@
 // Boo for macOS: a native window around the local Boo server.
 // On launch it starts Resources/app/boot.py (bundled Python, models and Ollama), waits for "BOO_READY <port>",
 // then shows the page. Quitting stops the whole process group.
+import AVFoundation
 import Cocoa
 import WebKit
 
@@ -32,6 +33,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate {
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
 
+        AVCaptureDevice.requestAccess(for: .audio) { _ in }   // ask for the mic now, while the models load
         web.loadHTMLString(Self.page("Waking up the models…", "The first start takes a little while."), baseURL: nil)
         startServer()
     }
